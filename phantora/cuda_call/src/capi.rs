@@ -73,7 +73,10 @@ fn enum_to_nccl_reduce_op(op: i32) -> NcclReduceOp {
 }
 
 fn ignore_cpu_time() -> bool {
-    env::var_os("PHANTORA_IGNORE_CPU_TIME").is_some()
+    match env::var("PHANTORA_IGNORE_CPU_TIME") {
+        Ok(v) => !(v == "0" || v.eq_ignore_ascii_case("false")),
+        Err(_) => false,
+    }
 }
 
 fn get_current_sim_time() -> i64 {
