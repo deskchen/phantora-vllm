@@ -10,6 +10,7 @@ SIMULATOR_TEMPLATE = r"""
     ipc: host
     environment:
       - PHANTORA_LOG=${{PHANTORA_LOG:-info}}
+      - PHANTORA_USE_CUPTI=${{PHANTORA_USE_CUPTI:-1}}
       - PHANTORA_SOCKET_PREFIX=/run/phantora/phantora
     command: /phantora/dist/phantora_server --netconfig /netconfig.toml
     cpuset: '{cpuset}'
@@ -35,7 +36,7 @@ HOST_TEMPLATE = r"""
     environment:
       - PHANTORA_NGPU={ngpu}
       - PHANTORA_VRAM_MIB={vram_mib}
-      - PHANTORA_IGNORE_CPU_TIME=1
+      - PHANTORA_IGNORE_CPU_TIME=${{PHANTORA_IGNORE_CPU_TIME:-1}}
       - PHANTORA_SOCKET_PREFIX=/run/phantora/phantora
     hostname: host-{host_id}
     command: /usr/sbin/sshd -D

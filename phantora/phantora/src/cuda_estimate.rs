@@ -12,6 +12,11 @@ macro_rules! assert_cuda {
         let err = $e;
         if err != 0 {
             log::error!("{} error {}, {}:{}", stringify!($e), err, file!(), line!());
+            unsafe {
+                crate::cuda_bindings::cudaGetLastError();
+                crate::cuda_bindings::cudaDeviceSynchronize();
+                crate::cuda_bindings::cudaGetLastError();
+            }
         }
     }};
 }
@@ -26,6 +31,15 @@ macro_rules! estimate {
             for _ in 0..(n - 1) {
                 let _ = $e;
             };
+            // CUPTI hygiene: drain pending warmup records before the
+            // measured window opens. Sync first to make sure the
+            // warmup kernels have actually completed (they're async,
+            // so their CUPTI records may not exist yet without sync).
+            if $crate::cupti::enabled() {
+                assert_cuda!(cudaDeviceSynchronize());
+                $crate::cupti::flush_and_sum_ns();  // discard warmup
+            }
+            $crate::cupti::clear();
             let mut start_event = ptr::null_mut();
             let mut end_event = ptr::null_mut();
             assert_cuda!(cudaEventCreate(&mut start_event));
@@ -34,11 +48,16 @@ macro_rules! estimate {
             result = $e;
             assert_cuda!(cudaEventRecord(end_event, ptr::null_mut()));
             assert_cuda!(cudaEventSynchronize(end_event));
-            let mut elapsed: f32 = 0.0;
-            assert_cuda!(cudaEventElapsedTime(&mut elapsed, start_event, end_event));
+            if $crate::cupti::enabled() {
+                let cupti_ns = $crate::cupti::flush_and_sum_ns();
+                dur = std::time::Duration::from_nanos(cupti_ns);
+            } else {
+                let mut elapsed: f32 = 0.0;
+                assert_cuda!(cudaEventElapsedTime(&mut elapsed, start_event, end_event));
+                dur = Duration::from_secs_f64(elapsed as f64 * 1e-3);
+            }
             assert_cuda!(cudaEventDestroy(start_event));
             assert_cuda!(cudaEventDestroy(end_event));
-            dur = Duration::from_secs_f64(elapsed as f64 * 1e-3);
         };
         (result, dur)
     }}
@@ -227,6 +246,10 @@ impl CudaEstimator {
             .unwrap();
             (torch.unbind(), flash_attn_cuda.unbind(), device.unbind())
         });
+
+        // CUPTI activity tracking. Must happen AFTER the warmup matmul
+        // above — CUPTI requires an initialised CUDA context.
+        crate::cupti::init();
 
         Self {
             memcpy_cache: HashMap::new(),

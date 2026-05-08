@@ -30,9 +30,22 @@ fn kind_range(kind: Kind) -> KindRange {
     }
 }
 
+/// Measure a torch op with `n` warmup + 1 measured iteration.
+/// Skips `tch::autocast` when inputs are already bf16/fp16 — autocast
+/// adds ~6× dispatch overhead for tensors that won't be dtype-converted,
+/// inflating both cudaEvent and CUPTI measurements. Only applies autocast
+/// for fp32 inputs where mixed-precision is actually useful.
 macro_rules! estimate_torch {
+    ($n:expr, $e:expr, $dtype:expr) => {{
+        if $dtype == tch::Kind::Float || $dtype == tch::Kind::Double {
+            tch::autocast(true, || estimate!($n, $e))
+        } else {
+            estimate!($n, $e)
+        }
+    }};
+    // Backward-compatible: no dtype → no autocast (default inference path).
     ($n:expr, $e:expr) => {{
-        tch::autocast(true, || estimate!($n, $e))
+        estimate!($n, $e)
     }};
 }
 
