@@ -38,4 +38,8 @@ extern "C" {
     ) -> ffi::c_int;
 
     pub fn cudaStreamSynchronize(stream: *mut ffi::c_void) -> ffi::c_int;
+
+    pub fn cudaDeviceSynchronize() -> ffi::c_int;
+
+    pub fn cudaGetLastError() -> ffi::c_int;
 }
