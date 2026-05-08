@@ -1,6 +1,7 @@
 pub mod args;
 pub mod cuda_bindings;
 pub mod cuda_estimate;
+pub mod cupti;
 pub mod event_queue;
 pub mod nccl_ops;
 pub mod simulator;
